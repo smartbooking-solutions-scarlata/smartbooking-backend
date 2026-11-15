@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from .models import Usuario, Reserva
 from .permissions import IsAdminRole, IsOwnerOrAdmin
@@ -93,6 +94,36 @@ class LoginView(APIView):
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'mensaje': 'Login exitoso',
+        }, status=status.HTTP_200_OK)
+# REFRESH
+class RefreshView(APIView):
+    # POST /api/auth/refresh/  (público: se valida el refresh que viene en el body)
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token_str = request.data.get('refresh')
+        if not token_str:
+            return Response({'refresh': ['Este campo es obligatorio.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            refresh = RefreshToken(token_str)
+        except TokenError:
+            return Response({'detail': 'Token inválido o expirado.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
+        usuario = Usuario.objects.filter(pk=refresh.get('user_id')).first()
+        if not usuario or not usuario.activo:
+            return Response({'detail': 'Token inválido o expirado.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
+        # Rotación: se entrega un refresh nuevo junto con el access nuevo
+        nuevo = RefreshToken.for_user(usuario)
+        nuevo['rol'] = usuario.rol
+        nuevo['email'] = usuario.email
+        return Response({
+            'access': str(nuevo.access_token),
+            'refresh': str(nuevo),
         }, status=status.HTTP_200_OK)
 
 
