@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
-from .models import Usuario, Reserva
+from .models import Usuario, Reserva, TokenBloqueado
 from .permissions import IsAdminRole, IsOwnerOrAdmin
 from .serializers import (
     UsuarioSerializer,
@@ -112,12 +112,21 @@ class RefreshView(APIView):
             return Response({'detail': 'Token inválido o expirado.'},
                             status=status.HTTP_401_UNAUTHORIZED)
 
+        if TokenBloqueado.objects.filter(jti=refresh['jti']).exists():
+            logger.warning(
+                'Refresh con token bloqueado | ip=%s | resultado=DENEGADO',
+                request.META.get('REMOTE_ADDR')
+            )
+            return Response({'detail': 'Token inválido o expirado.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+
         usuario = Usuario.objects.filter(pk=refresh.get('user_id')).first()
         if not usuario or not usuario.activo:
             return Response({'detail': 'Token inválido o expirado.'},
                             status=status.HTTP_401_UNAUTHORIZED)
 
-        # Rotación: se entrega un refresh nuevo junto con el access nuevo
+        # Rotación: el refresh usado queda bloqueado y se entrega uno nuevo
+        TokenBloqueado.objects.get_or_create(jti=refresh['jti'])
         nuevo = RefreshToken.for_user(usuario)
         nuevo['rol'] = usuario.rol
         nuevo['email'] = usuario.email
@@ -125,6 +134,35 @@ class RefreshView(APIView):
             'access': str(nuevo.access_token),
             'refresh': str(nuevo),
         }, status=status.HTTP_200_OK)
+# LOGOUT
+class LogoutView(APIView):
+    # POST /api/auth/logout/  (usuario autenticado)
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token_str = request.data.get('refresh')
+        if not token_str:
+            return Response({'refresh': ['Este campo es obligatorio.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            refresh = RefreshToken(token_str)
+        except TokenError:
+            return Response({'detail': 'Token inválido o expirado.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Solo se puede cerrar la sesión propia
+        if str(refresh.get('user_id')) != str(request.user.id_usuario):
+            logger.warning(
+                'Logout con refresh ajeno | usuario=%s | resultado=DENEGADO',
+                request.user.id_usuario
+            )
+            return Response({'detail': 'El token no pertenece a este usuario.'},
+                            status=status.HTTP_403_FORBIDDEN)
+
+        TokenBloqueado.objects.get_or_create(jti=refresh['jti'])
+        return Response({'mensaje': 'Sesión cerrada correctamente.'},
+                        status=status.HTTP_200_OK)
 
 
 # PERFIL
