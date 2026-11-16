@@ -50,3 +50,13 @@ class Reserva(models.Model):
 
     def __str__(self):
         return f'Reserva #{self.id_reserva} - {self.fecha} {self.hora_inicio}-{self.hora_fin}'
+
+class TokenBloqueado(models.Model):
+    jti = models.CharField(max_length=255, unique=True)
+    bloqueado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'token_bloqueado'
+
+    def __str__(self):
+        return self.jti
