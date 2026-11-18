@@ -52,3 +52,43 @@ class SeguridadAPITests(TestCase):
         self.client.force_authenticate(user=comun)
         r = self.client.get('/api/usuarios/')
         self.assertEqual(r.status_code, 403)
+
+class ReservasReglasTests(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.usuario = crear_usuario('reglas@test.com')
+        self.client.force_authenticate(user=self.usuario)
+        self.fecha = (date.today() + timedelta(days=30)).isoformat()
+
+    def _reserva(self, inicio, fin):
+        return self.client.post('/api/reservas/', {
+            'fecha': self.fecha, 'hora_inicio': inicio,
+            'hora_fin': fin, 'motivo': 'Prueba',
+        }, format='json')
+
+    def test_aut_api_05_crear_reserva_valida(self):
+        r = self._reserva('10:00', '12:00')
+        self.assertEqual(r.status_code, 201)
+
+    def test_aut_api_06_rn01_rechaza_reserva_superpuesta(self):
+        self._reserva('10:00', '12:00')
+        r = self._reserva('11:00', '13:00')
+        self.assertEqual(r.status_code, 400)
+
+    def test_aut_api_07_rn02_rechaza_fecha_pasada(self):
+        r = self.client.post('/api/reservas/', {
+            'fecha': (date.today() - timedelta(days=1)).isoformat(),
+            'hora_inicio': '10:00', 'hora_fin': '12:00', 'motivo': 'Pasada',
+        }, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_aut_api_08_rn03_fin_debe_ser_posterior_al_inicio(self):
+        r = self._reserva('15:00', '14:00')
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('hora_fin', r.data)
+
+    def test_aut_api_09_reservas_consecutivas_no_se_superponen(self):
+        self._reserva('10:00', '12:00')
+        r = self._reserva('12:00', '14:00')
+        self.assertEqual(r.status_code, 201)
