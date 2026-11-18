@@ -187,6 +187,15 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     queryset = Usuario.objects.all()
     serializer_class = UsuarioAdminSerializer
     http_method_names = ['get', 'patch', 'head', 'options']
+    def perform_update(self, serializer):
+        antes = {'rol': serializer.instance.rol, 'activo': serializer.instance.activo}
+        usuario = serializer.save()
+        logger.info(
+            'Modificacion administrativa | admin=%s | accion=PATCH | recurso=usuario/%s | '
+            'rol: %s->%s | activo: %s->%s | resultado=OK',
+            self.request.user.id_usuario, usuario.id_usuario,
+            antes['rol'], usuario.rol, antes['activo'], usuario.activo
+        )
 
 
 # RESERVAS

@@ -124,24 +124,31 @@ USE_I18N = True
 
 USE_TZ = True
 
-LOGGING = {
+LOGGING = LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'seguridad': {
+            'format': '{asctime} | {levelname} | {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'security_file': {
             'class': 'logging.FileHandler',
             'filename': BASE_DIR / 'security.log',
+            'formatter': 'seguridad',
+            'encoding': 'utf-8',
         },
     },
     'loggers': {
         'security': {
             'handlers': ['security_file'],
-            'level': 'WARNING',
+            'level': 'INFO',
             'propagate': False,
         },
     },
 }
-
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
